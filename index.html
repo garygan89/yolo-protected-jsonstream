@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <title>Darknet YOLO Protected JSON Stream Viewer</title>
+</head>
+<body>
+
+<h1>Darknet YOLO Protected JSON Stream Viewer</h1>
+
+<h3>Select Secret Key:</h3>
+<input type="file" id="file-input" />
+<h3>Contents of the file:</h3>
+<pre id="file-content"></pre>
+
+<canvas id="myCanvas" width="800" height="600" style="border:1px solid #d3d3d3;">
+Your browser does not support the HTML5 canvas tag.</canvas>
+
+    <!-- <script src="fernetBrowser.js"></script> -->
+    <!-- Server location to get the fernetBrowser.js, which is a Browsify script in node_modules/fernet/fernetBrowser.js -->
+    <script src="http://127.0.0.1:8765/js"></script> 
+    <script>
+    
+    // by default the coordinates and size sent by YOLO is normalized and very small
+    const CANVAS_SCALE = 500;
+    
+    var decryptData;
+    
+    // JSON property from YOLO JSON stream
+    var class_id, confidence;
+    // used for box
+    var center_x, center_y, width, height;
+    
+    // holds the Box object parsed from JSON stream, used in drawBox
+    var boxes = new Array();
+        
+    // Canvas to draw the box
+    var c = document.getElementById("myCanvas");
+    var ctx = c.getContext("2d"); 
+    
+    <!-- var secret = new fernet.Secret("cw_0x689RpI-jtRR7oE8h_eQsKImvJapLeSbXpwF4e4="); -->
+    
+    // use a dummy secret key at first
+    var secret = new fernet.Secret('cw_0x689RpI-jtRR7oE8h_esdevdvJapLeSbXpwF4e4=');
+    
+    const ws = new WebSocket('ws://localhost:3030');
+    ws.onopen = () => { 
+      console.log('Now connected'); 
+    };
+    
+    ws.onmessage = (event) => {
+      const messages = event.data;
+      
+      // find key
+      <!-- console.log(decrypt(messages)); -->
+      try {
+        decryptData = decrypt(messages);
+        <!-- console.log(decryptData); -->
+        parseJSONIntoBoxObj(decryptData);
+      
+        drawBox(boxes);
+      
+        // clear boxes when receiving next set of JSON
+        boxes.splice(0, boxes.length);         
+      } catch (e) {
+          var element = document.getElementById('file-content');
+          element.textContent = 'Unable to decode due to invalid key! Showing you the encrypted message instead \n' +
+          messages;      
+      }
+    };
+    
+    function decrypt(data) {
+        var token = new fernet.Token({
+          secret: secret,
+          token: data,
+          ttl: 0
+        })
+        return token.decode();
+    };
+    
+    function Box (center_x, center_y, height, width) {
+        this.center_x = center_x;
+        this.center_y = center_y;
+        this.height = height;
+        this.width = width;
+    };
+    
+    // Parse JSON and serialize as Box obj
+    function parseJSONIntoBoxObj(data) {
+        <!-- console.log(data); -->
+        
+        jObj = JSON.parse(data);
+        for (i in jObj) {
+            class_id = jObj[i].class_id;
+            confidence = jObj[i].confidence;
+            
+            center_x = jObj[i].relative_coordinates.center_x;
+            center_y = jObj[i].relative_coordinates.center_y;
+            height = jObj[i].relative_coordinates.height;
+            width = jObj[i].relative_coordinates.width;
+            <!-- console.log('center_x=' + center_x); -->
+            <!-- console.log('center_y=' + center_y); -->
+            <!-- console.log('height=' + height); -->
+            <!-- console.log('width=' + width);             -->
+            boxes.push(new Box(center_x, center_y, height, width));
+        }    
+        <!-- console.log("boxes count=" + boxes.length); -->
+    };
+    
+    function drawBox(boxes) {
+        // clear canvas before drawing
+        ctx.clearRect(0,0,c.width,c.height);
+        
+        for (i = 0 ; i < boxes.length; i++) {
+            <!-- console.log(boxes[i].center_x); -->
+            ctx.beginPath();
+            ctx.lineWidth = "1";
+            ctx.strokeStyle = "red";
+            // scale it because the value is normalized and very small
+            ctx.rect(boxes[i].center_x*CANVAS_SCALE, boxes[i].center_y*CANVAS_SCALE, boxes[i].width*CANVAS_SCALE, boxes[i].height*CANVAS_SCALE);  
+            ctx.stroke();
+        }
+        
+        // clear boxes when receiving next set of JSON, we don't want to overlap the box
+        boxes.splice(0, boxes.length);
+    }
+   
+    // handle user secret key file selection
+       document.getElementById('file-input')
+      .addEventListener('change', readSingleFile, false);
+    
+    function readSingleFile(e) {
+      var file = e.target.files[0];
+      if (!file) {
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var contents = e.target.result;
+        displayContents(contents);
+      };
+      reader.readAsText(file);
+    }    
+    
+    function displayContents(contents) {
+      var element = document.getElementById('file-content');
+      element.textContent = "Valid key, decoding and showing the result!";
+      
+      // update and use the selected secret key
+      secret = new fernet.Secret(contents);
+    }    
+    </script>  
+  
+</body>
+</html>
