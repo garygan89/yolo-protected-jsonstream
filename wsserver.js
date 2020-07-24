@@ -2,8 +2,8 @@ var oboe = require('oboe'); // to receive YOLO local JSON stream
 var fernet = require('fernet'); // symmetrical key encryption
 var WebSocket = require('ws');
 
-// IP of the host running darknet demo
-var DARKNET_YOLO_URL = 'http://192.168.1.15:8070';
+// IP of the host running darknet demo, default is the machine running YOLO
+var DARKNET_YOLO_URL = 'http://localhost:8070';
 
 function YOLOObject(class_id, name, relative_coordinates, confidence) {
     this.class_id = class_id;
